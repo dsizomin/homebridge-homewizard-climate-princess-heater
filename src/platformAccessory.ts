@@ -19,6 +19,7 @@ import {
 } from "./ws/types";
 import {WsClient} from "./ws/client";
 import {MessageType} from "./ws/const";
+import {normalizeSlashes} from "ts-node";
 
 /**
  * Platform Accessory
@@ -77,7 +78,6 @@ export class HomewizardPrincessHeaterAccessory {
 
     onWsMessage(message: string) {
         const incomingMessage = JSON.parse(message)
-        this.platform.log.debug('Incoming message (accessory):', incomingMessage)
         if ('state' in incomingMessage) {
             this.onStateMessage(incomingMessage)
         } else if ('message_id' in incomingMessage) {
@@ -140,13 +140,18 @@ export class HomewizardPrincessHeaterAccessory {
                 this.platform.Characteristic.TargetHeatingCoolingState.OFF;
 
             let stateValue: boolean
+            let normalizedValue: CharacteristicValue = value
 
             switch (value) {
                 case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
+                case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
                     stateValue = false;
+                    normalizedValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF
                     break;
                 case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
+                case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
                     stateValue = true;
+                    normalizedValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT
                     break;
                 default:
                     this.platform.log.warn('Setting Characteristic TargetHeatingCoolingState, but value is not supported ->', value);
@@ -169,7 +174,7 @@ export class HomewizardPrincessHeaterAccessory {
 
             this.settersCallbackMap[message.message_id] = (err) => err ?
                 callback(err, currentValue) :
-                callback(null, value)
+                callback(null, normalizedValue)
 
             this.wsClient.send(message);
         } else {
