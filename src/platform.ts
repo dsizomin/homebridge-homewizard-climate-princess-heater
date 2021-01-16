@@ -68,6 +68,9 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
     const wsPromise = open();
 
     Promise.all([authResponsePromise, wsPromise]).then(([auth, ws]) =>{
+
+      ws.on('message', (message) => this.log.debug('Incoming message:', message))
+
       const client = new WsClient(ws)
 
       ws.on('message', (message: string) => {
@@ -94,7 +97,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
   }
   
   async onHelloMessageResponse(response: ResponseWsIncomingMessage, wsClient: WsClient) {
-    this.log.debug('Received a response to Hello message. Going to get list of devices...');
+    this.log.debug('Received a response to Hello message. Going to get list of devices...', response);
 
     const authorization: string = this.config.authorization as string;
     const devices = await getDevices(authorization);
