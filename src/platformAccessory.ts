@@ -53,6 +53,9 @@ export class HomewizardPrincessHeaterAccessory {
             .on('set', this.setTargetHeatingCoolingState.bind(this))
             .on('get', this.getTargetHeatingCoolingState.bind(this));
 
+        this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
+            .on('get', this.getCurrentHeaterCoolerState.bind(this));
+
         this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
             .on('get', this.getCurrentHeatingCoolingState.bind(this));
 
@@ -106,6 +109,20 @@ export class HomewizardPrincessHeaterAccessory {
         this.state = message.state
     }
 
+    getCurrentHeaterCoolerState(callback: CharacteristicGetCallback) {
+        if (this.state) {
+            const value = this.state.power_on ?
+                this.platform.Characteristic.CurrentHeaterCoolerState.HEATING :
+                this.platform.Characteristic.CurrentHeaterCoolerState.INACTIVE
+
+            this.platform.log.debug('Get Characteristic CurrentHeaterCoolerState ->', value, this.state.power_on);
+            callback(null, value)
+        } else {
+            this.platform.log.warn('Trying to get CurrentHeaterCoolerState but state is null');
+            callback(null, this.platform.Characteristic.CurrentHeaterCoolerState.INACTIVE)
+        }
+    }
+
     getCurrentHeatingCoolingState(callback: CharacteristicGetCallback) {
         if (this.state) {
             const value = this.state.power_on ?
@@ -115,6 +132,7 @@ export class HomewizardPrincessHeaterAccessory {
             this.platform.log.debug('Get Characteristic CurrentHeatingCoolingState ->', value, this.state.power_on);
             callback(null, value)
         } else {
+            this.platform.log.warn('Trying to get CurrentHeatingCoolingState but state is null');
             callback(null, this.platform.Characteristic.CurrentHeatingCoolingState.OFF)
         }
     }
@@ -128,6 +146,7 @@ export class HomewizardPrincessHeaterAccessory {
             this.platform.log.debug('Get Characteristic TargetHeatingCoolingState ->', value, this.state.power_on);
             callback(null, value)
         } else {
+            this.platform.log.warn('Trying to get TargetHeatingCoolingState but state is null');
             callback(null, this.platform.Characteristic.TargetHeatingCoolingState.OFF)
         }
     }
@@ -178,6 +197,7 @@ export class HomewizardPrincessHeaterAccessory {
 
             this.wsClient.send(message);
         } else {
+            this.platform.log.warn('Trying to set TargetHeatingCoolingState but state is null');
             callback(null, this.platform.Characteristic.TargetHeatingCoolingState.OFF)
         }
     }
@@ -187,6 +207,7 @@ export class HomewizardPrincessHeaterAccessory {
             this.platform.log.debug('Get Characteristic CurrentTemperature ->', this.state.current_temperature, this.state.current_temperature);
             callback(null, this.state.current_temperature)
         } else {
+            this.platform.log.warn('Trying to get CurrentTemperature but state is null');
             callback(null, 0)
         }
     }
@@ -196,6 +217,7 @@ export class HomewizardPrincessHeaterAccessory {
             this.platform.log.debug('Get Characteristic TargetTemperature ->', this.state.target_temperature, this.state.current_temperature);
             callback(null, this.state.target_temperature)
         } else {
+            this.platform.log.warn('Trying to get TargetTemperature but state is null');
             callback(null, 0)
         }
     }
@@ -226,6 +248,7 @@ export class HomewizardPrincessHeaterAccessory {
 
             this.wsClient.send(message);
         } else {
+            this.platform.log.warn('Trying to set TargetTemperature but state is null');
             callback(null, 0)
         }
     }
