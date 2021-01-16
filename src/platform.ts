@@ -69,12 +69,11 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
 
     Promise.all([authResponsePromise, wsPromise]).then(([auth, ws]) =>{
 
-      ws.on('message', (message) => this.log.debug('Incoming message:', message))
-
       const client = new WsClient(ws)
 
       ws.on('message', (message: string) => {
         const incomingMessage: WsIncomingMessage = JSON.parse(message)
+        this.log.debug('Incoming message (platform):', incomingMessage)
         if (
             'message_id' in incomingMessage &&
             incomingMessage.message_id in client.outgoingMessages &&

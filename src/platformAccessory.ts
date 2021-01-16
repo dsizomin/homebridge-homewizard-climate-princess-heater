@@ -66,6 +66,7 @@ export class HomewizardPrincessHeaterAccessory {
 
     onWsMessage(message: string) {
         const incomingMessage = JSON.parse(message)
+        this.platform.log.debug('Incoming message (accessory):', incomingMessage)
         if ('state' in incomingMessage) {
             this.onStateMessage(incomingMessage)
         } else if ('message_id' in incomingMessage) {
