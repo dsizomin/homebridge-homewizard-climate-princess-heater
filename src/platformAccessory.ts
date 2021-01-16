@@ -53,12 +53,14 @@ export class HomewizardPrincessHeaterAccessory {
             .on('get', this.getHeatingCoolingState.bind(this));
 
         this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
-            .on('set', this.setHeatingCoolingState.bind(this))
             .on('get', this.getHeatingCoolingState.bind(this));
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
             .on('set', this.setTargetTemperature.bind(this))
             .on('get', this.getTargetTemperature.bind(this));
+
+        this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+            .on('get', this.getCurrentTemperature.bind(this));
 
         this.wsClient.ws.on('message', this.onWsMessage.bind(this));
 
@@ -128,14 +130,14 @@ export class HomewizardPrincessHeaterAccessory {
 
             switch (value) {
                 case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
-                    stateValue = true;
+                    stateValue = false;
                     break;
                 case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
                     stateValue = true;
                     break;
                 default:
                     this.platform.log.warn('Setting Characteristic HeatingCoolingState, but value is not supported ->', value);
-                    callback(null, currentValue)
+                    callback(new Error('Unsupported characteristic value'), currentValue)
                     return;
             }
 
@@ -146,7 +148,7 @@ export class HomewizardPrincessHeaterAccessory {
                 patch: [{
                     op: "replace",
                     path: `/state/power_on`,
-                    value: value
+                    value: stateValue
                 }]
             }
 
@@ -157,6 +159,15 @@ export class HomewizardPrincessHeaterAccessory {
             this.wsClient.send(message);
         } else {
             callback(null, this.platform.Characteristic.TargetHeatingCoolingState.OFF)
+        }
+    }
+
+    getCurrentTemperature(callback: CharacteristicGetCallback) {
+        if (this.state) {
+            this.platform.log.debug('Get Characteristic CurrentTemperature ->', this.state.current_temperature);
+            callback(null, this.state.target_temperature)
+        } else {
+            callback(null, 0)
         }
     }
 
