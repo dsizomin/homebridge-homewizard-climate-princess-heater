@@ -180,7 +180,7 @@ export class HomewizardPrincessHeaterAccessory {
     getCurrentTemperature(callback: CharacteristicGetCallback) {
         if (this.state) {
             this.platform.log.debug('Get Characteristic CurrentTemperature ->', this.state.current_temperature, this.state.current_temperature);
-            callback(null, this.state.target_temperature)
+            callback(null, this.state.current_temperature)
         } else {
             callback(null, 0)
         }
