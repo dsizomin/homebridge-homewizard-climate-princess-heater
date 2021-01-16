@@ -1,6 +1,23 @@
-import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
+import {
+    CharacteristicGetCallback,
+    CharacteristicSetCallback,
+    CharacteristicValue,
+    PlatformAccessory,
+    Service
+} from 'homebridge';
 
-import { HomebridgePrincessHeaterPlatform } from './platform';
+import {HomebridgePrincessHeaterPlatform} from './platform';
+import {
+    JSONPatchWsOutgoingMessage,
+    PrincessHeaterAccessoryContext,
+    PrincessHeaterState,
+    PrincessHeaterStateWsIncomingMessage,
+    ResponseWsIncomingMessage,
+    SubscribeWsOutgoingMessage,
+    WsIncomingMessage
+} from "./ws/types";
+import {WsClient} from "./ws/client";
+import {MessageType} from "./ws/const";
 
 /**
  * Platform Accessory
@@ -8,144 +25,101 @@ import { HomebridgePrincessHeaterPlatform } from './platform';
  * Each accessory may expose multiple services of different service types.
  */
 export class HomewizardPrincessHeaterAccessory {
-  private service: Service;
-
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private exampleStates = {
-    On: false,
-    Brightness: 100,
-  };
-
-  constructor(
-    private readonly platform: HomebridgePrincessHeaterPlatform,
-    private readonly accessory: PlatformAccessory,
-  ) {
-
-    // set accessory information
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
-
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
-    // you can create multiple services for each accessory
-    this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
-
-    // set the service name, this is what is displayed as the default name on the Home app
-    // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
-
-    // each service must implement at-minimum the "required characteristics" for the given service type
-    // see https://developers.homebridge.io/#/service/Lightbulb
-
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
-      .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
-
-    // register handlers for the Brightness Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
-
+    private service: Service;
 
     /**
-     * Creating multiple services of the same type.
-     * 
-     * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-     * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-     * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-     * 
-     * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-     * can use the same sub type id.)
+     * These are just used to create a working example
+     * You should implement your own code to track the state of your accessory
      */
+    private state: PrincessHeaterState | null = null;
 
-    // Example: add two "motion sensor" services to the accessory
-    const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
+    private settersCallbackMap: {
+        [messageId: number]: CharacteristicSetCallback
+    } = {}
 
-    const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
+    constructor(
+        private readonly platform: HomebridgePrincessHeaterPlatform,
+        private readonly accessory: PlatformAccessory<PrincessHeaterAccessoryContext>,
+        private readonly wsClient: WsClient,
+    ) {
 
-    /**
-     * Updating characteristics values asynchronously.
-     * 
-     * Example showing how to update the state of a Characteristic asynchronously instead
-     * of using the `on('get')` handlers.
-     * Here we change update the motion sensor trigger states on and off every 10 seconds
-     * the `updateCharacteristic` method.
-     * 
-     */
-    let motionDetected = false;
-    setInterval(() => {
-      // EXAMPLE - inverse the trigger
-      motionDetected = !motionDetected;
+        this.service = this.accessory.getService(this.platform.Service.HeaterCooler) || this.accessory.addService(this.platform.Service.HeaterCooler);
 
-      // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-      motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
+        this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
 
-      this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-      this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    }, 10000);
-  }
+        this.service.getCharacteristic(this.platform.Characteristic.On)
+            .on('set', this.setOn.bind(this))
+            .on('get', this.getOn.bind(this));
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
-   */
-  setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+        this.wsClient.ws.on('message', this.onWsMessage.bind(this));
 
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
+        this.platform.log.info('Subscribing to device updates:', this.accessory.context.device.name);
 
-    this.platform.log.debug('Set Characteristic On ->', value);
+        const message: SubscribeWsOutgoingMessage = {
+            type: MessageType.SubscribeDevice,
+            device: this.accessory.context.device.identifier,
+            message_id: wsClient.generateMessageId()
+        }
 
-    // you must call the callback function
-    callback(null);
-  }
+        wsClient.send(message)
+    }
 
-  /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   * 
-   * GET requests should return as fast as possbile. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   * 
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
+    onWsMessage(message: WsIncomingMessage) {
+        if ('state' in message) {
+            this.onStateMessage(message)
+        } else if ('message_id' in message) {
+            const requestMessage = this.wsClient.outgoingMessages[message.message_id];
+            if (
+                requestMessage.type === MessageType.JSONPatch &&
+                requestMessage.device === this.accessory.context.device.identifier
+            ) {
+                this.onJSONPatchResponse(message)
+            }
+        }
+    }
 
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-   */
-  getOn(callback: CharacteristicGetCallback) {
+    onJSONPatchResponse(message: ResponseWsIncomingMessage) {
+        const messageId = message.message_id;
+        if (
+            messageId in this.settersCallbackMap
+        ) {
+            const callback = this.settersCallbackMap[messageId]
+            callback.call(null, message.status === 200 ? null : new Error(JSON.stringify(message)))
+        }
+    }
 
-    // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
+    onStateMessage(message: PrincessHeaterStateWsIncomingMessage) {
+        this.state = message.state
+    }
 
-    this.platform.log.debug('Get Characteristic On ->', isOn);
+    setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+        if (this.state) {
+            this.platform.log.debug('Set Characteristic On ->', value);
+            this.state.power_on = true;
 
-    // you must call the callback function
-    // the first argument should be null if there were no errors
-    // the second argument should be the value to return
-    callback(null, isOn);
-  }
+            const message: JSONPatchWsOutgoingMessage = {
+                type: MessageType.JSONPatch,
+                message_id: this.wsClient.generateMessageId(),
+                device: this.accessory.context.device.identifier,
+                patch: [{
+                    op: "replace",
+                    path: "/state/power_on",
+                    value: value
+                }]
+            }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
-   */
-  setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+            this.settersCallbackMap[message.message_id] = callback;
 
-    // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
+            this.wsClient.send(message);
+        } else {
+            this.platform.log.warn('Setting Characteristic On, but device state is null ->', value);
+        }
+    }
 
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
-
-    // you must call the callback function
-    callback(null);
-  }
+    getOn(callback: CharacteristicGetCallback) {
+        const isOn = this.state ? this.state.power_on : false;
+        this.platform.log.debug('Get Characteristic On ->', isOn);
+        callback(null, isOn);
+    }
 
 }

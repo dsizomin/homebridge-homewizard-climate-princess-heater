@@ -1,7 +1,20 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
+import {
+  API,
+  Characteristic,
+  DynamicPlatformPlugin,
+  Logger,
+  PlatformAccessory,
+  PlatformConfig,
+  Service
+} from 'homebridge';
 
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { HomewizardPrincessHeaterAccessory } from './platformAccessory';
+import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
+import {HomewizardPrincessHeaterAccessory} from './platformAccessory';
+import {PrincessHeaterAccessoryContext, ResponseWsIncomingMessage, WsIncomingMessage} from "./ws/types";
+import {DeviceType, MessageType} from "./ws/const";
+import {getDevices, login} from "./http";
+import {open} from "./ws";
+import {WsClient} from "./ws/client";
 
 /**
  * HomebridgePlatform
@@ -13,7 +26,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
   // this is used to track restored cached accessories
-  public readonly accessories: PlatformAccessory[] = [];
+  public readonly accessories: PlatformAccessory<PrincessHeaterAccessoryContext>[] = [];
 
   constructor(
     public readonly log: Logger,
@@ -37,7 +50,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
    * This function is invoked when homebridge restores cached accessories from disk at startup.
    * It should be used to setup event handlers for characteristics and update respective values.
    */
-  configureAccessory(accessory: PlatformAccessory) {
+  configureAccessory(accessory: PlatformAccessory<PrincessHeaterAccessoryContext>) {
     this.log.info('Loading accessory from cache:', accessory.displayName);
 
     // add the restored accessory to the accessories cache so we can track if it has already been registered
@@ -51,71 +64,81 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
    */
   discoverDevices() {
 
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-    ];
+    const authResponsePromise = login(this.config.authorization as string);
+    const wsPromise = open();
 
-    // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of exampleDevices) {
+    Promise.all([authResponsePromise, wsPromise]).then(([auth, ws]) =>{
+      const client = new WsClient(ws)
 
-      // generate a unique id for the accessory this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(device.exampleUniqueId);
+      ws.on('message', (message: WsIncomingMessage) => {
+        if (
+            'message_id' in message &&
+            message.message_id in client.outgoingMessages &&
+            client.outgoingMessages[message.message_id].type === MessageType.Hello
+        ) {
+          return this.onHelloMessageResponse(message, client);
+        }
+      });
 
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
-      const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+      client.send({
+        type: MessageType.Hello,
+        message_id: client.generateMessageId(),
+        version: "2.4.0",
+        os: "ios",
+        source: "climate",
+        compatibility: 3,
+        token: auth.token
+      })
+    })
+  }
+  
+  async onHelloMessageResponse(response: ResponseWsIncomingMessage, wsClient: WsClient) {
+    this.log.debug('Received a response to Hello message. Going to get list of devices...');
 
-      if (existingAccessory) {
-        // the accessory already exists
-        if (device) {
+    const authorization: string = this.config.authorization as string;
+    const devices = await getDevices(authorization);
+
+    this.log.debug('Received a list of devices:', devices.map(d => d.name));
+
+    const devicesUUIDs = devices.map(d => this.api.hap.uuid.generate(d.identifier));
+
+    this.accessories
+        .filter(a => !devicesUUIDs.includes(a.UUID))
+        .forEach(a => {
+          this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [a]);
+          this.log.info('Removing existing accessory from cache:', a.displayName);
+        })
+
+    devices.forEach((device, i) => {
+
+      if (device.type === DeviceType.Heater) {
+
+        const uuid = devicesUUIDs[i];
+
+        const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+
+        if (existingAccessory) {
           this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
-
-          // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-          // existingAccessory.context.device = device;
-          // this.api.updatePlatformAccessories([existingAccessory]);
-
-          // create the accessory handler for the restored accessory
-          // this is imported from `platformAccessory.ts`
-          new HomewizardPrincessHeaterAccessory(this, existingAccessory);
-          
-          // update accessory cache with any changes to the accessory details and information
+          new HomewizardPrincessHeaterAccessory(this, existingAccessory, wsClient);
           this.api.updatePlatformAccessories([existingAccessory]);
-        } else if (!device) {
-          // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-          // remove platform accessories when no longer present
-          this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-          this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
+        } else {
+          this.log.info('Adding new accessory:', device.name);
+
+          const accessory = new this.api.platformAccessory(device.name, uuid);
+
+          accessory.context.device = device;
+
+          new HomewizardPrincessHeaterAccessory(
+              this,
+              accessory as PlatformAccessory<PrincessHeaterAccessoryContext>,
+              wsClient
+          );
+
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         }
       } else {
-        // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.exampleDisplayName);
-
-        // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
-
-        // store a copy of the device object in the `accessory.context`
-        // the `context` property can be used to store any data about the accessory you may need
-        accessory.context.device = device;
-
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        new HomewizardPrincessHeaterAccessory(this, accessory);
-
-        // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.log.info('Unsupported device type:', device.type);
       }
-    }
+    })
   }
 }

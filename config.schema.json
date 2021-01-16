@@ -10,6 +10,12 @@
         "type": "string",
         "required": true,
         "default": "Example Dynamic Platform"
+      },
+      "authorization": {
+        "title": "Authorization header",
+        "type": "string",
+        "required": true,
+        "default": "Basic"
       }
     }
   }
