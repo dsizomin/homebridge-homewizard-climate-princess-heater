@@ -106,6 +106,7 @@ export class HomewizardPrincessHeaterAccessory {
     }
 
     onStateMessage(message: PrincessHeaterStateWsIncomingMessage) {
+        this.platform.log.info('Updating state from message ->', message);
         this.state = message.state
     }
 
@@ -193,7 +194,10 @@ export class HomewizardPrincessHeaterAccessory {
 
             this.settersCallbackMap[message.message_id] = (err) => err ?
                 callback(err, currentValue) :
-                callback(null, normalizedValue)
+                callback(
+                    normalizedValue === value ? null : new Error('Value has been normalized'),
+                    normalizedValue
+                )
 
             this.wsClient.send(message);
         } else {
@@ -244,7 +248,10 @@ export class HomewizardPrincessHeaterAccessory {
 
             this.settersCallbackMap[message.message_id] = (err) => err ?
                 callback(err, currentValue) :
-                callback(null, normalizedValue)
+                callback(
+                    normalizedValue === value ? null : new Error('Value has been normalized'),
+                    normalizedValue
+                )
 
             this.wsClient.send(message);
         } else {
