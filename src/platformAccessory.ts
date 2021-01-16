@@ -64,16 +64,17 @@ export class HomewizardPrincessHeaterAccessory {
         wsClient.send(message)
     }
 
-    onWsMessage(message: WsIncomingMessage) {
-        if ('state' in message) {
-            this.onStateMessage(message)
-        } else if ('message_id' in message) {
-            const requestMessage = this.wsClient.outgoingMessages[message.message_id];
+    onWsMessage(message: string) {
+        const incomingMessage = JSON.parse(message)
+        if ('state' in incomingMessage) {
+            this.onStateMessage(incomingMessage)
+        } else if ('message_id' in incomingMessage) {
+            const requestMessage = this.wsClient.outgoingMessages[incomingMessage.message_id];
             if (
                 requestMessage.type === MessageType.JSONPatch &&
                 requestMessage.device === this.accessory.context.device.identifier
             ) {
-                this.onJSONPatchResponse(message)
+                this.onJSONPatchResponse(incomingMessage)
             }
         }
     }
