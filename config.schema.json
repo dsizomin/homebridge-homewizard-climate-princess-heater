@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "HomebridgePrincessHeaterPlugin",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -9,7 +9,7 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": "Homebridge Princess Heater Platform"
       },
       "authorization": {
         "title": "Authorization header",
