@@ -1,4 +1,5 @@
 import {
+    Characteristic,
     CharacteristicGetCallback,
     CharacteristicSetCallback,
     CharacteristicValue,
@@ -33,9 +34,18 @@ export class HomewizardPrincessHeaterAccessory {
      */
     private state: PrincessHeaterState | null = null;
 
-    private settersCallbackMap: {
+    private readonly settersCallbackMap: {
         [messageId: number]: CharacteristicSetCallback
     } = {}
+
+    private readonly characteristicStatePathMap: {
+        [characteristicUUID: string]: keyof PrincessHeaterState
+    } = {
+        [this.platform.Characteristic.On.UUID]: 'power_on',
+        [this.platform.Characteristic.CurrentTemperature.UUID]: 'current_temperature',
+        [this.platform.Characteristic.TargetTemperature.UUID]: 'target_temperature',
+        [this.platform.Characteristic.LockPhysicalControls.UUID]: 'lock'
+    }
 
     constructor(
         private readonly platform: HomebridgePrincessHeaterPlatform,
@@ -48,8 +58,20 @@ export class HomewizardPrincessHeaterAccessory {
         this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
 
         this.service.getCharacteristic(this.platform.Characteristic.On)
-            .on('set', this.setOn.bind(this))
-            .on('get', this.getOn.bind(this));
+            .on('set', this.setCharacteristic(this.platform.Characteristic.On.UUID).bind(this))
+            .on('get', this.getCharacteristic(this.platform.Characteristic.On.UUID).bind(this));
+
+        this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+            .on('set', this.setCharacteristic(this.platform.Characteristic.CurrentTemperature.UUID).bind(this))
+            .on('get', this.getCharacteristic(this.platform.Characteristic.CurrentTemperature.UUID).bind(this));
+
+        this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+            .on('set', this.setCharacteristic(this.platform.Characteristic.TargetTemperature.UUID).bind(this))
+            .on('get', this.getCharacteristic(this.platform.Characteristic.TargetTemperature.UUID).bind(this));
+
+        this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
+            .on('set', this.setCharacteristic(this.platform.Characteristic.LockPhysicalControls.UUID).bind(this))
+            .on('get', this.getCharacteristic(this.platform.Characteristic.LockPhysicalControls.UUID).bind(this));
 
         this.wsClient.ws.on('message', this.onWsMessage.bind(this));
 
@@ -94,34 +116,44 @@ export class HomewizardPrincessHeaterAccessory {
         this.state = message.state
     }
 
-    setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-        if (this.state) {
-            this.platform.log.debug('Set Characteristic On ->', value);
-            this.state.power_on = true;
-
-            const message: JSONPatchWsOutgoingMessage = {
-                type: MessageType.JSONPatch,
-                message_id: this.wsClient.generateMessageId(),
-                device: this.accessory.context.device.identifier,
-                patch: [{
-                    op: "replace",
-                    path: "/state/power_on",
-                    value: value
-                }]
+    getCharacteristic(characteristicUUID: string) {
+        return (callback: CharacteristicGetCallback) => {
+            if (this.state && characteristicUUID in this.characteristicStatePathMap) {
+                const value = this.state[this.characteristicStatePathMap[characteristicUUID]]
+                this.platform.log.debug(`Get Characteristic ${characteristicUUID} ->`, value);
+                callback(null, value)
+            } else {
+                callback(null, null)
             }
-
-            this.settersCallbackMap[message.message_id] = callback;
-
-            this.wsClient.send(message);
-        } else {
-            this.platform.log.warn('Setting Characteristic On, but device state is null ->', value);
         }
     }
 
-    getOn(callback: CharacteristicGetCallback) {
-        const isOn = this.state ? this.state.power_on : false;
-        this.platform.log.debug('Get Characteristic On ->', isOn);
-        callback(null, isOn);
+    setCharacteristic(characteristicUUID: string) {
+        return (value: CharacteristicValue, callback: CharacteristicSetCallback) => {
+
+            if (this.state && characteristicUUID in this.characteristicStatePathMap) {
+                this.platform.log.debug(`Set Characteristic ${characteristicUUID} ->`, value);
+                this.state.power_on = true;
+
+                const path = `${this.characteristicStatePathMap[characteristicUUID]}`;
+                const message: JSONPatchWsOutgoingMessage = {
+                    type: MessageType.JSONPatch,
+                    message_id: this.wsClient.generateMessageId(),
+                    device: this.accessory.context.device.identifier,
+                    patch: [{
+                        op: "replace",
+                        path: `/state/${path}`,
+                        value: value
+                    }]
+                }
+
+                this.settersCallbackMap[message.message_id] = callback;
+
+                this.wsClient.send(message);
+            } else {
+                this.platform.log.warn('Setting Characteristic On, but device state is null ->', value);
+            }
+        }
     }
 
 }
