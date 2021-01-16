@@ -49,11 +49,11 @@ export class HomewizardPrincessHeaterAccessory {
         this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
-            .on('set', this.setHeatingCoolingState.bind(this))
-            .on('get', this.getHeatingCoolingState.bind(this));
+            .on('set', this.setTargetHeatingCoolingState.bind(this))
+            .on('get', this.getTargetHeatingCoolingState.bind(this));
 
         this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
-            .on('get', this.getHeatingCoolingState.bind(this));
+            .on('get', this.getCurrentHeatingCoolingState.bind(this));
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
             .on('set', this.setTargetTemperature.bind(this))
@@ -106,20 +106,33 @@ export class HomewizardPrincessHeaterAccessory {
         this.state = message.state
     }
 
-    getHeatingCoolingState(callback: CharacteristicGetCallback) {
+    getCurrentHeatingCoolingState(callback: CharacteristicGetCallback) {
+        if (this.state) {
+            const value = this.state.power_on ?
+                this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
+                this.platform.Characteristic.CurrentHeatingCoolingState.OFF
+
+            this.platform.log.debug('Get Characteristic CurrentHeatingCoolingState ->', value, this.state.power_on);
+            callback(null, value)
+        } else {
+            callback(null, this.platform.Characteristic.CurrentHeatingCoolingState.OFF)
+        }
+    }
+
+    getTargetHeatingCoolingState(callback: CharacteristicGetCallback) {
         if (this.state) {
             const value = this.state.power_on ?
                 this.platform.Characteristic.TargetHeatingCoolingState.HEAT :
                 this.platform.Characteristic.TargetHeatingCoolingState.OFF
 
-            this.platform.log.debug('Get Characteristic HeatingCoolingState ->', value);
+            this.platform.log.debug('Get Characteristic TargetHeatingCoolingState ->', value, this.state.power_on);
             callback(null, value)
         } else {
             callback(null, this.platform.Characteristic.TargetHeatingCoolingState.OFF)
         }
     }
 
-    setHeatingCoolingState(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+    setTargetHeatingCoolingState(value: CharacteristicValue, callback: CharacteristicSetCallback) {
         if (this.state) {
 
             let currentValue: CharacteristicValue = this.state.power_on ?
@@ -136,10 +149,12 @@ export class HomewizardPrincessHeaterAccessory {
                     stateValue = true;
                     break;
                 default:
-                    this.platform.log.warn('Setting Characteristic HeatingCoolingState, but value is not supported ->', value);
+                    this.platform.log.warn('Setting Characteristic TargetHeatingCoolingState, but value is not supported ->', value);
                     callback(new Error('Unsupported characteristic value'), currentValue)
                     return;
             }
+
+            this.platform.log.debug('Set Characteristic TargetHeatingCoolingState ->', value, stateValue);
 
             const message: JSONPatchWsOutgoingMessage = {
                 type: MessageType.JSONPatch,
@@ -164,7 +179,7 @@ export class HomewizardPrincessHeaterAccessory {
 
     getCurrentTemperature(callback: CharacteristicGetCallback) {
         if (this.state) {
-            this.platform.log.debug('Get Characteristic CurrentTemperature ->', this.state.current_temperature);
+            this.platform.log.debug('Get Characteristic CurrentTemperature ->', this.state.current_temperature, this.state.current_temperature);
             callback(null, this.state.target_temperature)
         } else {
             callback(null, 0)
@@ -173,7 +188,7 @@ export class HomewizardPrincessHeaterAccessory {
 
     getTargetTemperature(callback: CharacteristicGetCallback) {
         if (this.state) {
-            this.platform.log.debug('Get Characteristic TargetTemperature ->', this.state.target_temperature);
+            this.platform.log.debug('Get Characteristic TargetTemperature ->', this.state.target_temperature, this.state.current_temperature);
             callback(null, this.state.target_temperature)
         } else {
             callback(null, 0)
@@ -197,6 +212,8 @@ export class HomewizardPrincessHeaterAccessory {
                     value: normalizedValue
                 }]
             }
+
+            this.platform.log.debug('Set Characteristic TargetTemperature ->', value, normalizedValue);
 
             this.settersCallbackMap[message.message_id] = (err) => err ?
                 callback(err, currentValue) :
