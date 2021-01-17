@@ -13,6 +13,5 @@
 
 This is a template Homebridge Princess Heater Plugin platform plugin intended for personal use to control Princess Heater.
 
-
-![Screenshot](screenshot.png)
+<img src="https://github.com/dsizomin/homebridge-homewizard-climate-princess-heater/raw/master/screenshot.PNG" width="320">
 
