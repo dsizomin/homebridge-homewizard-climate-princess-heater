@@ -39,7 +39,7 @@ export class WsAPIClient extends EventEmitter {
 
         this.
           _open()
-          .then(this._handshake)
+          .then(ws => this._handshake(ws))
           .then(ws => this.ws = ws)
           .catch(err => rej(err));
       } else {
