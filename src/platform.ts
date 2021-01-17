@@ -120,10 +120,4 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
         }
       });
     }
-
-    async onHelloMessageResponse(response: ResponseWsIncomingMessage, wsClient: WsAPIClient, httpClient: HttpAPIClient) {
-      this.log.debug('Received a response to Hello message. Going to get list of devices...', response);
-
-
-    }
 }
