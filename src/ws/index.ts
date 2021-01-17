@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import {HelloWsOutgoingMessage, WsIncomingMessage, WsOutgoingMessage} from './types';
+import {HelloWsOutgoingMessage, ResponseWsIncomingMessage, WsIncomingMessage, WsOutgoingMessage} from './types';
 import {MessageType, WS_URL} from './const';
 import {EventEmitter} from 'events';
 import {Logger} from 'homebridge';
@@ -21,7 +21,7 @@ export class WsAPIClient extends EventEmitter {
 
   public async send<M extends WsOutgoingMessage>(
     message: Omit<M, 'message_id'>,
-  ): Promise<M> {
+  ): Promise<ResponseWsIncomingMessage> {
 
     const ws = await this._getWebSocket();
     return this._send<M>(message, ws);
@@ -99,7 +99,7 @@ export class WsAPIClient extends EventEmitter {
   private async _send<M extends WsOutgoingMessage>(
     message: Omit<M, 'message_id'>,
     ws: WebSocket,
-  ): Promise<M> {
+  ): Promise<ResponseWsIncomingMessage> {
 
     const sentMessage = await new Promise((res, rej) => {
       const messageId = ++this.lastMessageId;
@@ -127,7 +127,7 @@ export class WsAPIClient extends EventEmitter {
 
   private _waitForResponse<M extends WsOutgoingMessage>(
     outgoingMessage: M,
-  ): Promise<M> {
+  ): Promise<ResponseWsIncomingMessage> {
     return new Promise((res, rej) => {
 
       this.log.debug('Waiting for message response -> ', outgoingMessage);
@@ -145,7 +145,7 @@ export class WsAPIClient extends EventEmitter {
           this.off('message', onMessage);
           clearTimeout(timeout);
           if (incomingMessage.status === 200) {
-            res(outgoingMessage);
+            res(incomingMessage as ResponseWsIncomingMessage);
           } else {
             rej(incomingMessage);
           }

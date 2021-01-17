@@ -5,9 +5,9 @@ import {
   JSONPatchWsIncomingMessage,
   JSONPatchWsOutgoingMessage,
   PrincessHeaterAccessoryContext,
-  PrincessHeaterStateWsIncomingMessage,
+  PrincessHeaterStateWsIncomingMessage, ResponseWsIncomingMessage,
   SubscribeWsOutgoingMessage,
-  WsIncomingMessage,
+  WsIncomingMessage, WsOutgoingMessage,
 } from './ws/types';
 import {WsAPIClient} from './ws';
 import {MessageType} from './ws/const';
@@ -53,10 +53,51 @@ export class HomewizardPrincessHeaterAccessory {
 
     this.platform.log.debug('Subscribing to device updates:', this.accessory.context.device.name);
 
-    wsClient.send<SubscribeWsOutgoingMessage>({
+    this.subscribe().catch(
+      err => this.platform.log.error('Failed to subscribe to device ->', this.accessory.context.device.name, err),
+    );
+  }
+
+  subscribe(): Promise<ResponseWsIncomingMessage> {
+    return this.wsClient.send<SubscribeWsOutgoingMessage>({
       type: MessageType.SubscribeDevice,
       device: this.accessory.context.device.identifier,
     });
+  }
+
+  async jsonPatch(path: string, value: boolean | number, callback: CharacteristicSetCallback): Promise<ResponseWsIncomingMessage> {
+
+    const message = {
+      type: MessageType.JSONPatch,
+      device: this.accessory.context.device.identifier,
+      patch: [{
+        op: 'replace',
+        path: path,
+        value,
+      }],
+    };
+
+    const trySend = () => this.wsClient.send(message).then(m => {
+      callback(null);
+      return m;
+    });
+
+    return trySend()
+      .catch(err => {
+        if (err.code === 400) {
+          this.platform.log.warn('Error code 400. Might mean we need to re-subscribe ->', message, err);
+          return this.subscribe().then(() => trySend());
+        } else {
+          this.platform.log.error('Failed to send jsonPatch message ->', message, err);
+          callback(err);
+          throw err;
+        }
+      })
+      .catch(err => {
+        this.platform.log.error('Failed to send jsonPatch message ->', message, err);
+        callback(err);
+        throw err; 
+      });
   }
 
   onWsMessage(message: WsIncomingMessage) {
@@ -146,33 +187,17 @@ export class HomewizardPrincessHeaterAccessory {
 
     this.platform.log.debug('Set Characteristic TargetHeatingCoolingState ->', value);
 
-    this.wsClient.send<JSONPatchWsOutgoingMessage>({
-      type: MessageType.JSONPatch,
-      device: this.accessory.context.device.identifier,
-      patch: [{
-        op: 'replace',
-        path: '/state/power_on',
-        value: value === this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
-      }],
-    })
-      .then(() => callback(null))
-      .catch((err) => callback(err));
+    this.jsonPatch(
+      '/state/power_on',
+      value === this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
+      callback,
+    );
   }
 
   setTargetTemperature(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
     this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
 
-    this.wsClient.send<JSONPatchWsOutgoingMessage>({
-      type: MessageType.JSONPatch,
-      device: this.accessory.context.device.identifier,
-      patch: [{
-        op: 'replace',
-        path: '/state/target_temperature',
-        value: value as number,
-      }],
-    })
-      .then(() => callback(null))
-      .catch((err) => callback(err));
+    this.jsonPatch('/state/target_temperature', value as number, callback);
   }
 }
