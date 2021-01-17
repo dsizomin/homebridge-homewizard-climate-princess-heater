@@ -11,11 +11,17 @@
         "required": true,
         "default": "Homebridge Princess Heater Platform"
       },
-      "authorization": {
-        "title": "Authorization header",
+      "email": {
+        "title": "Email",
         "type": "string",
         "required": true,
-        "default": "Basic"
+        "default": ""
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "required": true,
+        "default": ""
       }
     }
   }

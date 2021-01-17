@@ -61,14 +61,13 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
       this.accessories.push(accessory);
     }
 
-    /**
-     * This is an example method showing how to register discovered accessories.
-     * Accessories must only be registered once, previously created accessories
-     * must not be registered again to prevent "duplicate UUID" errors.
-     */
     async discoverDevices() {
 
-      const auth = await login(this.config.authorization as string);
+      const authorizationHeaderValue = new Buffer(
+        `${this.config.email}:${this.config.password}`,
+      ).toString('base64');
+
+      const auth = await login(authorizationHeaderValue);
 
       const client = new WsClient(this.log);
 
