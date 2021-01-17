@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import {WsOutgoingMessage} from './types';
-import {MessageType, WS_URL} from './const';
+import {WS_URL} from './const';
 import {EventEmitter} from 'events';
 import {Logger} from 'homebridge';
 
@@ -75,12 +75,14 @@ export class WsClient extends EventEmitter {
 
     const ws = await wsPromise;
 
+    const messageId = ++this.lastMessageId;
+    const fullMessage = {
+      ...message,
+      message_id: messageId,
+    } as M;
+    this.log.debug('Sending WS message -> ', fullMessage);
+
     return new Promise((res, rej) => {
-      const messageId = ++this.lastMessageId;
-      const fullMessage = {
-        ...message,
-        message_id: messageId,
-      } as M;
       ws.send(
         JSON.stringify(fullMessage),
         (err) => {
@@ -88,6 +90,7 @@ export class WsClient extends EventEmitter {
             this.log.warn('Failed to send message ->', fullMessage, err);
             rej(err);
           } else {
+            this.log.debug('WS message sent ->', fullMessage);
             res(fullMessage);
           }
         },

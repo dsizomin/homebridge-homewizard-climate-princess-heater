@@ -74,6 +74,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
       const client = new WsClient(this.log);
 
       client.on('message', (message: WsIncomingMessage) => {
+        this.log.debug('platform message', message);
         if (
           helloMessage &&
           message.type === 'response' &&
