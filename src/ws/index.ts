@@ -1,6 +1,5 @@
 import WebSocket from 'ws';
 import {WS_URL} from './const';
-import {WsIncomingMessage} from './types';
 import {HomebridgePrincessHeaterPlatform} from '../platform';
 
 export const open = (platform: HomebridgePrincessHeaterPlatform): Promise<WebSocket> => new Promise((res) => {
@@ -8,8 +7,7 @@ export const open = (platform: HomebridgePrincessHeaterPlatform): Promise<WebSoc
   const ws = new WebSocket(WS_URL);
 
   ws.on('message', (message: string) => {
-    const incomingMessage: WsIncomingMessage = JSON.parse(message);
-    platform.log.debug('Incoming message:', incomingMessage);
+    platform.log.debug('Incoming message:', JSON.parse(message));
   });
 
   ws.on('close', () => {
