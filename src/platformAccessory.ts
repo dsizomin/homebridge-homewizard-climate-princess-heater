@@ -1,11 +1,4 @@
-import {
-    Characteristic,
-    CharacteristicGetCallback,
-    CharacteristicSetCallback,
-    CharacteristicValue,
-    PlatformAccessory,
-    Service
-} from 'homebridge';
+import {CharacteristicSetCallback, CharacteristicValue, PlatformAccessory, Service, Units} from 'homebridge';
 
 import {HomebridgePrincessHeaterPlatform} from './platform';
 import {
@@ -14,13 +7,10 @@ import {
     PrincessHeaterAccessoryContext,
     PrincessHeaterState,
     PrincessHeaterStateWsIncomingMessage,
-    ResponseWsIncomingMessage,
-    SubscribeWsOutgoingMessage,
-    WsIncomingMessage
+    SubscribeWsOutgoingMessage
 } from "./ws/types";
 import {WsClient} from "./ws/client";
 import {MessageType} from "./ws/const";
-import {normalizeSlashes} from "ts-node";
 
 /**
  * Platform Accessory
@@ -47,24 +37,22 @@ export class HomewizardPrincessHeaterAccessory {
         this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+            .setProps({
+                validValues: [
+                    this.platform.Characteristic.TargetHeatingCoolingState.OFF,
+                    this.platform.Characteristic.TargetHeatingCoolingState.HEAT
+                ]
+            })
             .on('set', this.setTargetHeatingCoolingState.bind(this));
-            // .on('get', this.getTargetHeatingCoolingState.bind(this));
 
-        // this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
-        //     .on('get', this.getCurrentHeaterCoolerState.bind(this));
-
-        // this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
-        //     .on('get', this.getCurrentHeatingCoolingState.bind(this));
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
             .setProps({
+                unit: Units.CELSIUS,
                 minStep: 1
             })
             .on('set', this.setTargetTemperature.bind(this))
-            // .on('get', this.getTargetTemperature.bind(this));
 
-        // this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-        //     .on('get', this.getCurrentTemperature.bind(this));
 
         this.wsClient.ws.on('message', this.onWsMessage.bind(this));
 
@@ -95,6 +83,39 @@ export class HomewizardPrincessHeaterAccessory {
     onStateMessage(message: PrincessHeaterStateWsIncomingMessage) {
         this.platform.log.info('Updating state from message ->', message);
         this.state = message.state
+
+        Object.keys(message.state).forEach(key => {
+            const value = message.state[key]
+
+            switch (key) {
+                case 'power_on':
+                    this.service.setCharacteristic(
+                        this.platform.Characteristic.TargetHeatingCoolingState,
+                        value ?
+                            this.platform.Characteristic.TargetHeatingCoolingState.HEAT :
+                            this.platform.Characteristic.TargetHeatingCoolingState.OFF
+                    );
+                    this.service.setCharacteristic(
+                        this.platform.Characteristic.CurrentHeatingCoolingState,
+                        value ?
+                            this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
+                            this.platform.Characteristic.CurrentHeatingCoolingState.OFF
+                    );
+                    break;
+                case 'current_temperature':
+                    this.service.setCharacteristic(
+                        this.platform.Characteristic.CurrentTemperature,
+                        value
+                    );
+                    break;
+                case 'target_temperature':
+                    this.service.setCharacteristic(
+                        this.platform.Characteristic.TargetTemperature,
+                        value
+                    );
+                    break;
+            }
+        })
     }
 
     setTargetHeatingCoolingState(value: CharacteristicValue, callback: CharacteristicSetCallback) {
@@ -138,6 +159,8 @@ export class HomewizardPrincessHeaterAccessory {
             }
 
             this.wsClient.send(message);
+
+            this.service.updateCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState, normalizedValue)
 
             callback(null)
         } else {
