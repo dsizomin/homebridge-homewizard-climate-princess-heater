@@ -218,7 +218,7 @@ export class HomewizardPrincessHeaterAccessory {
 
     getTargetTemperature(callback: CharacteristicGetCallback) {
         if (this.state) {
-            this.platform.log.debug('Get Characteristic TargetTemperature ->', this.state.target_temperature, this.state.current_temperature);
+            this.platform.log.debug('Get Characteristic TargetTemperature ->', this.state.target_temperature, this.state.target_temperature);
             callback(null, this.state.target_temperature)
         } else {
             this.platform.log.warn('Trying to get TargetTemperature but state is null');
