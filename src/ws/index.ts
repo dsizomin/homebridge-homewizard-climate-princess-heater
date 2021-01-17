@@ -14,7 +14,7 @@ export class WsAPIClient extends EventEmitter {
 
   constructor(
     private readonly log: Logger,
-    private readonly authorization: string,
+    private readonly token: string,
   ) {
     super();
   }
@@ -86,7 +86,7 @@ export class WsAPIClient extends EventEmitter {
       os: 'ios',
       source: 'climate',
       compatibility: 3,
-      token: this.authorization,
+      token: this.token,
     }, ws).then(() => ws);
   }
 

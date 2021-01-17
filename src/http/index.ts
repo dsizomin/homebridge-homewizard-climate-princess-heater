@@ -17,7 +17,7 @@ export class HttpAPIClient {
   constructor(private readonly authorization: string) {
     this.axiosInstance = axios.create({
       headers: {
-        Authorization: this.authorization,
+        Authorization: `Basic ${this.authorization}`,
       },
     });
   }
