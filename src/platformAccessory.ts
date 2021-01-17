@@ -25,7 +25,7 @@ export class HomewizardPrincessHeaterAccessory {
     private readonly wsClient: WsClient,
   ) {
 
-    this.service = 
+    this.service =
       this.accessory.getService(this.platform.Service.Thermostat) ||
       this.accessory.addService(this.platform.Service.Thermostat);
 
@@ -47,10 +47,6 @@ export class HomewizardPrincessHeaterAccessory {
         minStep: 1,
       })
       .on('set', this.setTargetTemperature.bind(this));
-
-    this.service.getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-      .on('set', this.setLockPhysicalControls.bind(this));
-
 
     this.wsClient.ws.on('message', this.onWsMessage.bind(this));
 
@@ -163,26 +159,6 @@ export class HomewizardPrincessHeaterAccessory {
     };
 
     this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
-
-    this.wsClient.send(message);
-
-    callback(null);
-  }
-
-  setLockPhysicalControls(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-
-    const message: JSONPatchWsOutgoingMessage = {
-      type: MessageType.JSONPatch,
-      message_id: this.wsClient.generateMessageId(),
-      device: this.accessory.context.device.identifier,
-      patch: [{
-        op: 'replace',
-        path: '/state/lock',
-        value: Boolean(value),
-      }],
-    };
-
-    this.platform.log.debug('Set Characteristic LockPhysicalControls ->', value);
 
     this.wsClient.send(message);
 
