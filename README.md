@@ -14,5 +14,5 @@
 This is a template Homebridge Princess Heater Plugin platform plugin intended for personal use to control Princess Heater.
 
 
-![Screenshot](./screenshot.png)
+![Screenshot](screenshot.png)
 
