@@ -71,37 +71,9 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
 
       const auth = await httpAPIClient.login();
 
-      const wsAPIClient = new WsAPIClient(this.log);
+      const wsAPIClient = new WsAPIClient(this.log, authorizationHeaderValue);
 
-      const helloMessage = await wsAPIClient.send<HelloWsOutgoingMessage>({
-        type: MessageType.Hello,
-        version: '2.4.0',
-        os: 'ios',
-        source: 'climate',
-        compatibility: 3,
-        token: auth.token,
-      });
-
-      wsAPIClient.on('message', (message: WsIncomingMessage) => {
-        if (
-          helloMessage &&
-          message.type === 'response' &&
-          message.message_id === helloMessage.message_id &&
-          message.status === 200
-        ) {
-          this.onHelloMessageResponse(
-            message as ResponseWsIncomingMessage,
-            wsAPIClient,
-            httpAPIClient,
-          );
-        }
-      });
-    }
-
-    async onHelloMessageResponse(response: ResponseWsIncomingMessage, wsClient: WsAPIClient, httpClient: HttpAPIClient) {
-      this.log.debug('Received a response to Hello message. Going to get list of devices...', response);
-
-      const devices = await httpClient.getDevices();
+      const devices = await httpAPIClient.getDevices();
 
       this.log.debug('Received a list of devices:', devices.map(d => d.name));
 
@@ -124,7 +96,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
 
           if (existingAccessory) {
             this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
-            new HomewizardPrincessHeaterAccessory(this, existingAccessory, wsClient);
+            new HomewizardPrincessHeaterAccessory(this, existingAccessory, wsAPIClient);
             this.api.updatePlatformAccessories([existingAccessory]);
           } else {
             this.log.info('Adding new accessory:', device.name);
@@ -136,7 +108,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
             new HomewizardPrincessHeaterAccessory(
               this,
               accessory as PlatformAccessory<PrincessHeaterAccessoryContext>,
-              wsClient,
+              wsAPIClient,
             );
 
             this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
@@ -145,5 +117,11 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
           this.log.info('Unsupported device type:', device.type);
         }
       });
+    }
+
+    async onHelloMessageResponse(response: ResponseWsIncomingMessage, wsClient: WsAPIClient, httpClient: HttpAPIClient) {
+      this.log.debug('Received a response to Hello message. Going to get list of devices...', response);
+
+
     }
 }
