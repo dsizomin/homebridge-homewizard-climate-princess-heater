@@ -40,7 +40,10 @@ export class WsAPIClient extends EventEmitter {
         this.
           _open()
           .then(ws => this._handshake(ws))
-          .then(ws => this.ws = ws)
+          .then(ws => {
+            this.ws = ws;
+            res(ws);
+          })
           .catch(err => rej(err));
       } else {
         return res(this.ws);
@@ -79,15 +82,18 @@ export class WsAPIClient extends EventEmitter {
     });
   }
 
-  private async _handshake(ws: WebSocket): Promise<WebSocket> {
-    return await this._send<HelloWsOutgoingMessage>({
+  private _handshake(ws: WebSocket): Promise<WebSocket> {
+    return this._send<HelloWsOutgoingMessage>({
       type: MessageType.Hello,
       version: '2.4.0',
       os: 'ios',
       source: 'climate',
       compatibility: 3,
       token: this.token,
-    }, ws).then(() => ws);
+    }, ws).then(() => {
+      this.log.debug('WS handshake successful');
+      return ws;
+    });
   }
 
   private async _send<M extends WsOutgoingMessage>(
