@@ -50,21 +50,21 @@ export class HomewizardPrincessHeaterAccessory {
         this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
-            .on('set', this.setTargetHeatingCoolingState.bind(this))
-            .on('get', this.getTargetHeatingCoolingState.bind(this));
+            .on('set', this.setTargetHeatingCoolingState.bind(this));
+            // .on('get', this.getTargetHeatingCoolingState.bind(this));
 
-        this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
-            .on('get', this.getCurrentHeaterCoolerState.bind(this));
+        // this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
+        //     .on('get', this.getCurrentHeaterCoolerState.bind(this));
 
-        this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
-            .on('get', this.getCurrentHeatingCoolingState.bind(this));
+        // this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+        //     .on('get', this.getCurrentHeatingCoolingState.bind(this));
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
             .on('set', this.setTargetTemperature.bind(this))
-            .on('get', this.getTargetTemperature.bind(this));
+            // .on('get', this.getTargetTemperature.bind(this));
 
-        this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-            .on('get', this.getCurrentTemperature.bind(this));
+        // this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+        //     .on('get', this.getCurrentTemperature.bind(this));
 
         this.wsClient.ws.on('message', this.onWsMessage.bind(this));
 
