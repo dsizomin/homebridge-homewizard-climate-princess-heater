@@ -66,9 +66,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
 
       const httpAPIClient = new HttpAPIClient(this.log, authorizationHeaderValue);
 
-      const token = await httpAPIClient.getToken();
-
-      const wsAPIClient = new WsAPIClient(this.log, token);
+      const wsAPIClient = new WsAPIClient(this.log, httpAPIClient);
 
       const devices = await httpAPIClient.getDevices();
 

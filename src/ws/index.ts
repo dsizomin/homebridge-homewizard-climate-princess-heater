@@ -3,6 +3,7 @@ import {HelloWsOutgoingMessage, ResponseWsIncomingMessage, WsIncomingMessage, Ws
 import {MessageType, WS_URL} from './const';
 import {EventEmitter} from 'events';
 import {Logger} from 'homebridge';
+import {HttpAPIClient} from '../http';
 
 const TIMEOUT = 60 * 1000; // 1 minute
 
@@ -14,7 +15,7 @@ export class WsAPIClient extends EventEmitter {
 
   constructor(
     private readonly log: Logger,
-    private readonly token: string,
+    private readonly httpApiClient: HttpAPIClient,
   ) {
     super();
   }
@@ -24,7 +25,20 @@ export class WsAPIClient extends EventEmitter {
   ): Promise<ResponseWsIncomingMessage> {
 
     const ws = await this._getWebSocket();
-    return this._send<M>(message, ws);
+
+    return this._send<M>(message, ws)
+      .catch(err => {
+        if (err.status === 401) {
+          this.log.warn('Error code 401. Might mean we need to refresh the token ->', message, err);
+          return this._handshake(ws).then(ws => this._send<M>(message, ws));
+        } else {
+          throw err;
+        }
+      })
+      .catch(err => {
+        this.log.error('Failed to send WS message ->', message, err);
+        throw err;
+      });
   }
 
   private _getWebSocket(): Promise<WebSocket> {
@@ -82,14 +96,17 @@ export class WsAPIClient extends EventEmitter {
     });
   }
 
-  private _handshake(ws: WebSocket): Promise<WebSocket> {
+  private async _handshake(ws: WebSocket): Promise<WebSocket> {
+
+    const token = await this.httpApiClient.getToken();
+
     return this._send<HelloWsOutgoingMessage>({
       type: MessageType.Hello,
       version: '2.4.0',
       os: 'ios',
       source: 'climate',
       compatibility: 3,
-      token: this.token,
+      token,
     }, ws).then(() => {
       this.log.debug('WS handshake successful');
       return ws;
@@ -112,7 +129,7 @@ export class WsAPIClient extends EventEmitter {
         JSON.stringify(fullMessage),
         (err) => {
           if (err) {
-            this.log.warn('Failed to send message ->', fullMessage, err);
+            this.log.warn('Failed to send WS message ->', fullMessage, err);
             rej(err);
           } else {
             this.log.debug('WS message sent ->', fullMessage);
