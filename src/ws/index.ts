@@ -26,7 +26,7 @@ export class WsClient extends EventEmitter {
       ws.on('message', (message: string) => {
         const json = JSON.parse(message);
         this.log.debug('Incoming message:', json);
-        this.emit(json);
+        this.emit('message', json);
       });
 
       ws.on('error', (error) => {
