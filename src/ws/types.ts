@@ -64,7 +64,17 @@ export type PrincessHeaterState = {
 
 export type PrincessHeaterStateWsIncomingMessage = StateWsIncomingMessage<PrincessHeaterState>;
 
-export type WsIncomingMessage = ResponseWsIncomingMessage | PrincessHeaterStateWsIncomingMessage | {}
+export type JSONPatchWsIncomingMessage = {
+    type: MessageType.JSONPatch;
+    device: string;
+    patch: [{
+        op: string;
+        path: string,
+        value: any
+    }]
+}
+
+export type WsIncomingMessage = ResponseWsIncomingMessage | PrincessHeaterStateWsIncomingMessage | JSONPatchWsIncomingMessage | {}
 
 export type PrincessHeaterAccessoryContext = {
     device: DeviceResponseItem & {

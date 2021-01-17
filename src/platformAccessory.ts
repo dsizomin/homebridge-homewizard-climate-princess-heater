@@ -9,6 +9,7 @@ import {
 
 import {HomebridgePrincessHeaterPlatform} from './platform';
 import {
+    JSONPatchWsIncomingMessage,
     JSONPatchWsOutgoingMessage,
     PrincessHeaterAccessoryContext,
     PrincessHeaterState,
@@ -35,10 +36,6 @@ export class HomewizardPrincessHeaterAccessory {
      */
     private state: PrincessHeaterState | null = null;
 
-    private readonly settersCallbackMap: {
-        [messageId: number]: (Error?) => void
-    } = {}
-
     constructor(
         private readonly platform: HomebridgePrincessHeaterPlatform,
         private readonly accessory: PlatformAccessory<PrincessHeaterAccessoryContext>,
@@ -60,6 +57,9 @@ export class HomewizardPrincessHeaterAccessory {
         //     .on('get', this.getCurrentHeatingCoolingState.bind(this));
 
         this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+            .setProps({
+                minStep: 1
+            })
             .on('set', this.setTargetTemperature.bind(this))
             // .on('get', this.getTargetTemperature.bind(this));
 
@@ -83,73 +83,18 @@ export class HomewizardPrincessHeaterAccessory {
         const incomingMessage = JSON.parse(message)
         if ('state' in incomingMessage) {
             this.onStateMessage(incomingMessage)
-        } else if ('message_id' in incomingMessage) {
-            const requestMessage = this.wsClient.outgoingMessages[incomingMessage.message_id];
-            if (
-                requestMessage.type === MessageType.JSONPatch &&
-                requestMessage.device === this.accessory.context.device.identifier
-            ) {
-                this.onJSONPatchResponse(incomingMessage)
-            }
+        } else if ('type' in incomingMessage && incomingMessage.type === MessageType.JSONPatch) {
+            this.onJSONMessage(incomingMessage)
         }
     }
 
-    onJSONPatchResponse(message: ResponseWsIncomingMessage) {
-        const messageId = message.message_id;
-        if (
-            messageId in this.settersCallbackMap
-        ) {
-            const callback = this.settersCallbackMap[messageId]
-            callback.call(null, message.status === 200 ? null : new Error(JSON.stringify(message)))
-            delete this.settersCallbackMap[messageId]
-        }
+    onJSONMessage(message: JSONPatchWsIncomingMessage) {
+        console.log('Incoming JSON patch', message)
     }
 
     onStateMessage(message: PrincessHeaterStateWsIncomingMessage) {
         this.platform.log.info('Updating state from message ->', message);
         this.state = message.state
-    }
-
-    getCurrentHeaterCoolerState(callback: CharacteristicGetCallback) {
-        if (this.state) {
-            const value = this.state.power_on ?
-                this.platform.Characteristic.CurrentHeaterCoolerState.HEATING :
-                this.platform.Characteristic.CurrentHeaterCoolerState.INACTIVE
-
-            this.platform.log.debug('Get Characteristic CurrentHeaterCoolerState ->', value, this.state.power_on);
-            callback(null, value)
-        } else {
-            this.platform.log.warn('Trying to get CurrentHeaterCoolerState but state is null');
-            callback(null, this.platform.Characteristic.CurrentHeaterCoolerState.INACTIVE)
-        }
-    }
-
-    getCurrentHeatingCoolingState(callback: CharacteristicGetCallback) {
-        if (this.state) {
-            const value = this.state.power_on ?
-                this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
-                this.platform.Characteristic.CurrentHeatingCoolingState.OFF
-
-            this.platform.log.debug('Get Characteristic CurrentHeatingCoolingState ->', value, this.state.power_on);
-            callback(null, value)
-        } else {
-            this.platform.log.warn('Trying to get CurrentHeatingCoolingState but state is null');
-            callback(null, this.platform.Characteristic.CurrentHeatingCoolingState.OFF)
-        }
-    }
-
-    getTargetHeatingCoolingState(callback: CharacteristicGetCallback) {
-        if (this.state) {
-            const value = this.state.power_on ?
-                this.platform.Characteristic.TargetHeatingCoolingState.HEAT :
-                this.platform.Characteristic.TargetHeatingCoolingState.OFF
-
-            this.platform.log.debug('Get Characteristic TargetHeatingCoolingState ->', value, this.state.power_on);
-            callback(null, value)
-        } else {
-            this.platform.log.warn('Trying to get TargetHeatingCoolingState but state is null');
-            callback(null, this.platform.Characteristic.TargetHeatingCoolingState.OFF)
-        }
     }
 
     setTargetHeatingCoolingState(value: CharacteristicValue, callback: CharacteristicSetCallback) {
@@ -192,46 +137,17 @@ export class HomewizardPrincessHeaterAccessory {
                 }]
             }
 
-            this.settersCallbackMap[message.message_id] = (err) => err ?
-                callback(err, currentValue) :
-                callback(
-                    normalizedValue === value ? null : new Error('Value has been normalized'),
-                    normalizedValue
-                )
-
             this.wsClient.send(message);
+
+            callback(null)
         } else {
             this.platform.log.warn('Trying to set TargetHeatingCoolingState but state is null');
-            callback(null, this.platform.Characteristic.TargetHeatingCoolingState.OFF)
-        }
-    }
-
-    getCurrentTemperature(callback: CharacteristicGetCallback) {
-        if (this.state) {
-            this.platform.log.debug('Get Characteristic CurrentTemperature ->', this.state.current_temperature, this.state.current_temperature);
-            callback(null, this.state.current_temperature)
-        } else {
-            this.platform.log.warn('Trying to get CurrentTemperature but state is null');
-            callback(null, 0)
-        }
-    }
-
-    getTargetTemperature(callback: CharacteristicGetCallback) {
-        if (this.state) {
-            this.platform.log.debug('Get Characteristic TargetTemperature ->', this.state.target_temperature, this.state.target_temperature);
-            callback(null, this.state.target_temperature)
-        } else {
-            this.platform.log.warn('Trying to get TargetTemperature but state is null');
-            callback(null, 0)
+            callback(new Error('Trying to set TargetHeatingCoolingState but state is null'))
         }
     }
 
     setTargetTemperature(value: CharacteristicValue, callback: CharacteristicSetCallback) {
         if (this.state) {
-
-            const currentValue: number = this.state.current_temperature
-
-            let normalizedValue: number = Math.round(Number(value))
 
             const message: JSONPatchWsOutgoingMessage = {
                 type: MessageType.JSONPatch,
@@ -240,23 +156,18 @@ export class HomewizardPrincessHeaterAccessory {
                 patch: [{
                     op: "replace",
                     path: `/state/target_temperature`,
-                    value: normalizedValue
+                    value: value
                 }]
             }
 
-            this.platform.log.debug('Set Characteristic TargetTemperature ->', value, normalizedValue);
-
-            this.settersCallbackMap[message.message_id] = (err) => err ?
-                callback(err, currentValue) :
-                callback(
-                    normalizedValue === value ? null : new Error('Value has been normalized'),
-                    normalizedValue
-                )
+            this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
 
             this.wsClient.send(message);
+
+            callback(null)
         } else {
             this.platform.log.warn('Trying to set TargetTemperature but state is null');
-            callback(null, 0)
+            callback(new Error('Trying to set TargetTemperature but state is null'))
         }
     }
 }
