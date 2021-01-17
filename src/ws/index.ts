@@ -6,7 +6,7 @@ import {Logger} from 'homebridge';
 
 const OPEN_TIMEOUT = 60 * 1000; // 1 minute
 
-export class WsClient extends EventEmitter {
+export class WsAPIClient extends EventEmitter {
 
   private lastMessageId = 0;
 

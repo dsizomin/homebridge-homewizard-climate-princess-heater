@@ -17,8 +17,8 @@ import {
   WsIncomingMessage,
 } from './ws/types';
 import {DeviceType, MessageType} from './ws/const';
-import {getDevices, login} from './http';
-import {WsClient} from './ws';
+import {HttpAPIClient} from './http';
+import {WsAPIClient} from './ws';
 
 /**
  * HomebridgePlatform
@@ -67,11 +67,13 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
         `${this.config.email}:${this.config.password}`,
       ).toString('base64');
 
-      const auth = await login(authorizationHeaderValue);
+      const httpAPIClient = new HttpAPIClient(authorizationHeaderValue);
 
-      const client = new WsClient(this.log);
+      const auth = await httpAPIClient.login();
 
-      const helloMessage = await client.send<HelloWsOutgoingMessage>({
+      const wsAPIClient = new WsAPIClient(this.log);
+
+      const helloMessage = await wsAPIClient.send<HelloWsOutgoingMessage>({
         type: MessageType.Hello,
         version: '2.4.0',
         os: 'ios',
@@ -80,7 +82,7 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
         token: auth.token,
       });
 
-      client.on('message', (message: WsIncomingMessage) => {
+      wsAPIClient.on('message', (message: WsIncomingMessage) => {
         if (
           helloMessage &&
           message.type === 'response' &&
@@ -89,17 +91,17 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
         ) {
           this.onHelloMessageResponse(
             message as ResponseWsIncomingMessage,
-            client,
+            wsAPIClient,
+            httpAPIClient,
           );
         }
       });
     }
 
-    async onHelloMessageResponse(response: ResponseWsIncomingMessage, wsClient: WsClient) {
+    async onHelloMessageResponse(response: ResponseWsIncomingMessage, wsClient: WsAPIClient, httpClient: HttpAPIClient) {
       this.log.debug('Received a response to Hello message. Going to get list of devices...', response);
 
-      const authorization: string = this.config.authorization as string;
-      const devices = await getDevices(authorization);
+      const devices = await httpClient.getDevices();
 
       this.log.debug('Received a list of devices:', devices.map(d => d.name));
 

@@ -9,7 +9,7 @@ import {
   SubscribeWsOutgoingMessage,
   WsIncomingMessage,
 } from './ws/types';
-import {WsClient} from './ws';
+import {WsAPIClient} from './ws';
 import {MessageType} from './ws/const';
 
 /**
@@ -23,7 +23,7 @@ export class HomewizardPrincessHeaterAccessory {
   constructor(
     private readonly platform: HomebridgePrincessHeaterPlatform,
     private readonly accessory: PlatformAccessory<PrincessHeaterAccessoryContext>,
-    private readonly wsClient: WsClient,
+    private readonly wsClient: WsAPIClient,
   ) {
 
     this.service =
