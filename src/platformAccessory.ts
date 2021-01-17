@@ -50,7 +50,7 @@ export class HomewizardPrincessHeaterAccessory {
 
     this.wsClient.ws.on('message', this.onWsMessage.bind(this));
 
-    this.platform.log.info('Subscribing to device updates:', this.accessory.context.device.name);
+    this.platform.log.debug('Subscribing to device updates:', this.accessory.context.device.name);
 
     const message: SubscribeWsOutgoingMessage = {
       type: MessageType.SubscribeDevice,
@@ -71,6 +71,9 @@ export class HomewizardPrincessHeaterAccessory {
   }
 
   onJSONPatchMessage(message: JSONPatchWsIncomingMessage) {
+
+    this.platform.log.debug('Updating state from patch message ->', message);
+
     message.patch.forEach(patchItem => {
       const {op, path, value} = patchItem;
 
@@ -80,15 +83,23 @@ export class HomewizardPrincessHeaterAccessory {
           const stateKey = match[1];
 
           switch (stateKey) {
-            case 'power_on':
+            case 'power_on': {
+
+              const characteristicValue: CharacteristicValue = value ?
+                this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
+                this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+
+              this.platform.log.debug('Updating CurrentHeatingCoolingState ->', characteristicValue);
+
               this.service.updateCharacteristic(
                 this.platform.Characteristic.CurrentHeatingCoolingState,
-                value ?
-                  this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
-                  this.platform.Characteristic.CurrentHeatingCoolingState.OFF,
+                characteristicValue,
               );
               break;
+            }
             case 'current_temperature':
+              this.platform.log.debug('Updating CurrentHeatingCoolingState ->', value);
+
               this.service.updateCharacteristic(
                 this.platform.Characteristic.CurrentTemperature,
                 value,
@@ -101,21 +112,30 @@ export class HomewizardPrincessHeaterAccessory {
   }
 
   onStateMessage(message: PrincessHeaterStateWsIncomingMessage) {
-    this.platform.log.info('Updating state from message ->', message);
+    this.platform.log.debug('Updating state from state message ->', message);
 
     Object.keys(message.state).forEach(key => {
       const value = message.state[key];
 
       switch (key) {
-        case 'power_on':
+        case 'power_on': {
+
+          const characteristicValue: CharacteristicValue = value ?
+            this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
+            this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+
+          this.platform.log.info('Updating CurrentHeatingCoolingState ->', characteristicValue);
+
           this.service.setCharacteristic(
             this.platform.Characteristic.CurrentHeatingCoolingState,
-            value ?
-              this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
-              this.platform.Characteristic.CurrentHeatingCoolingState.OFF,
+            characteristicValue,
           );
           break;
+        }
         case 'current_temperature':
+
+          this.platform.log.info('Updating CurrentTemperature ->', value);
+
           this.service.setCharacteristic(
             this.platform.Characteristic.CurrentTemperature,
             value,
@@ -140,9 +160,9 @@ export class HomewizardPrincessHeaterAccessory {
       }],
     };
 
-    this.wsClient.send(message);
-
-    callback(null);
+    this.wsClient.send(message)
+      .then(() => callback(null))
+      .catch((err) => callback(err));
   }
 
   setTargetTemperature(value: CharacteristicValue, callback: CharacteristicSetCallback) {
@@ -154,7 +174,7 @@ export class HomewizardPrincessHeaterAccessory {
       patch: [{
         op: 'replace',
         path: '/state/target_temperature',
-        value: value,
+        value: value as number,
       }],
     };
 
@@ -162,6 +182,8 @@ export class HomewizardPrincessHeaterAccessory {
 
     this.wsClient.send(message);
 
-    callback(null);
+    this.wsClient.send(message)
+      .then(() => callback(null))
+      .catch((err) => callback(err));
   }
 }

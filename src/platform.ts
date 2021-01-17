@@ -10,7 +10,11 @@ import {
 
 import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
 import {HomewizardPrincessHeaterAccessory} from './platformAccessory';
-import {PrincessHeaterAccessoryContext, ResponseWsIncomingMessage, WsIncomingMessage} from './ws/types';
+import {
+  PrincessHeaterAccessoryContext,
+  ResponseWsIncomingMessage,
+  WsOutgoingMessage,
+} from './ws/types';
 import {DeviceType, MessageType} from './ws/const';
 import {getDevices, login} from './http';
 import {open} from './ws';
@@ -65,25 +69,24 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
     discoverDevices() {
 
       const authResponsePromise = login(this.config.authorization as string);
-      const wsPromise = open();
+      const wsPromise = open(this);
 
       Promise.all([authResponsePromise, wsPromise]).then(([auth, ws]) => {
 
-        const client = new WsClient(ws);
+        const client = new WsClient(ws, this);
 
         ws.on('message', (message: string) => {
-          const incomingMessage: WsIncomingMessage = JSON.parse(message);
-          this.log.debug('Incoming message:', incomingMessage);
+          const incomingMessage = JSON.parse(message);
           if (
             'message_id' in incomingMessage &&
-                    incomingMessage.message_id in client.outgoingMessages &&
-                    client.outgoingMessages[incomingMessage.message_id].type === MessageType.Hello
+            incomingMessage.message_id in client.outgoingMessages &&
+            client.outgoingMessages[incomingMessage.message_id].type === MessageType.Hello
           ) {
             return this.onHelloMessageResponse(incomingMessage, client);
           }
         });
 
-        client.send({
+        const helloMessage: WsOutgoingMessage = {
           type: MessageType.Hello,
           message_id: client.generateMessageId(),
           version: '2.4.0',
@@ -91,6 +94,10 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
           source: 'climate',
           compatibility: 3,
           token: auth.token,
+        };
+
+        client.send(helloMessage).catch(err => {
+          this.log.error('Failed to send Hello message ->', helloMessage.message_id, err);
         });
       });
     }
