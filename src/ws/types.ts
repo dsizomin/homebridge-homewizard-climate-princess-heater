@@ -1,9 +1,13 @@
 import {DeviceType, MessageType, PrincessHeaterMode} from './const';
 import {DeviceResponseItem} from '../http';
 
-export type HelloWsOutgoingMessage = {
-    type: MessageType.Hello;
+export type WsOutgoingMessage = {
+    type: MessageType;
     message_id: number;
+};
+
+export type HelloWsOutgoingMessage = WsOutgoingMessage & {
+    type: MessageType.Hello;
     version: string;
     os: string;
     source: string;
@@ -11,16 +15,14 @@ export type HelloWsOutgoingMessage = {
     token: string;
 };
 
-export type SubscribeWsOutgoingMessage = {
+export type SubscribeWsOutgoingMessage = WsOutgoingMessage & {
     type: MessageType.SubscribeDevice;
-    message_id: number;
     device: string;
 };
 
-export type JSONPatchWsOutgoingMessage = {
+export type JSONPatchWsOutgoingMessage = WsOutgoingMessage & {
     type: MessageType.JSONPatch;
     device: string;
-    message_id: number;
     patch: [{
         op: string;
         path: string;
@@ -28,9 +30,9 @@ export type JSONPatchWsOutgoingMessage = {
     }];
 };
 
-export type WsOutgoingMessage = HelloWsOutgoingMessage | SubscribeWsOutgoingMessage | JSONPatchWsOutgoingMessage;
+export type WsIncomingMessage = Record<string, unknown>;
 
-export type ResponseWsIncomingMessage = {
+export type ResponseWsIncomingMessage = WsIncomingMessage & {
     type: 'response';
     message_id: number;
     status: number;
@@ -45,7 +47,7 @@ export type DeviceMetaData = {
     name: string;
 };
 
-export type StateWsIncomingMessage<S> = DeviceMetaData & {
+export type StateWsIncomingMessage<S> = WsIncomingMessage & DeviceMetaData & {
     state: S;
 };
 
@@ -64,7 +66,7 @@ export type PrincessHeaterState = {
 
 export type PrincessHeaterStateWsIncomingMessage = StateWsIncomingMessage<PrincessHeaterState>;
 
-export type JSONPatchWsIncomingMessage = {
+export type JSONPatchWsIncomingMessage = WsIncomingMessage & {
     type: MessageType.JSONPatch;
     device: string;
     patch: [{

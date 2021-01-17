@@ -7,8 +7,9 @@ import {
   PrincessHeaterAccessoryContext,
   PrincessHeaterStateWsIncomingMessage,
   SubscribeWsOutgoingMessage,
+  WsIncomingMessage,
 } from './ws/types';
-import {WsClient} from './ws/client';
+import {WsClient} from './ws';
 import {MessageType} from './ws/const';
 
 /**
@@ -48,25 +49,21 @@ export class HomewizardPrincessHeaterAccessory {
       })
       .on('set', this.setTargetTemperature.bind(this));
 
-    this.wsClient.ws.on('message', this.onWsMessage.bind(this));
+    this.wsClient.on('message', this.onWsMessage.bind(this));
 
     this.platform.log.debug('Subscribing to device updates:', this.accessory.context.device.name);
 
-    const message: SubscribeWsOutgoingMessage = {
+    wsClient.send<SubscribeWsOutgoingMessage>({
       type: MessageType.SubscribeDevice,
       device: this.accessory.context.device.identifier,
-      message_id: wsClient.generateMessageId(),
-    };
-
-    wsClient.send(message);
+    });
   }
 
-  onWsMessage(message: string) {
-    const incomingMessage = JSON.parse(message);
-    if ('state' in incomingMessage) {
-      this.onStateMessage(incomingMessage);
-    } else if ('type' in incomingMessage && incomingMessage.type === MessageType.JSONPatch) {
-      this.onJSONPatchMessage(incomingMessage);
+  onWsMessage(message: WsIncomingMessage) {
+    if ('state' in message) {
+      this.onStateMessage(message as PrincessHeaterStateWsIncomingMessage);
+    } else if ('type' in message && message.type === MessageType.JSONPatch) {
+      this.onJSONPatchMessage(message as JSONPatchWsOutgoingMessage);
     }
   }
 
@@ -149,40 +146,32 @@ export class HomewizardPrincessHeaterAccessory {
 
     this.platform.log.debug('Set Characteristic TargetHeatingCoolingState ->', value);
 
-    const message: JSONPatchWsOutgoingMessage = {
+    this.wsClient.send<JSONPatchWsOutgoingMessage>({
       type: MessageType.JSONPatch,
-      message_id: this.wsClient.generateMessageId(),
       device: this.accessory.context.device.identifier,
       patch: [{
         op: 'replace',
         path: '/state/power_on',
         value: value === this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
       }],
-    };
-
-    this.wsClient.send(message)
+    })
       .then(() => callback(null))
       .catch((err) => callback(err));
   }
 
   setTargetTemperature(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    const message: JSONPatchWsOutgoingMessage = {
+    this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
+
+    this.wsClient.send<JSONPatchWsOutgoingMessage>({
       type: MessageType.JSONPatch,
-      message_id: this.wsClient.generateMessageId(),
       device: this.accessory.context.device.identifier,
       patch: [{
         op: 'replace',
         path: '/state/target_temperature',
         value: value as number,
       }],
-    };
-
-    this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
-
-    this.wsClient.send(message);
-
-    this.wsClient.send(message)
+    })
       .then(() => callback(null))
       .catch((err) => callback(err));
   }

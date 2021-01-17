@@ -11,14 +11,14 @@ import {
 import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
 import {HomewizardPrincessHeaterAccessory} from './platformAccessory';
 import {
+  HelloWsOutgoingMessage,
   PrincessHeaterAccessoryContext,
   ResponseWsIncomingMessage,
-  WsOutgoingMessage,
+  WsIncomingMessage,
 } from './ws/types';
 import {DeviceType, MessageType} from './ws/const';
 import {getDevices, login} from './http';
-import {open} from './ws';
-import {WsClient} from './ws/client';
+import {WsClient} from './ws';
 
 /**
  * HomebridgePlatform
@@ -66,39 +66,32 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
      * Accessories must only be registered once, previously created accessories
      * must not be registered again to prevent "duplicate UUID" errors.
      */
-    discoverDevices() {
+    async discoverDevices() {
 
-      const authResponsePromise = login(this.config.authorization as string);
-      const wsPromise = open(this);
+      const auth = await login(this.config.authorization as string);
 
-      Promise.all([authResponsePromise, wsPromise]).then(([auth, ws]) => {
+      const client = new WsClient(this.log);
 
-        const client = new WsClient(ws, this);
+      const helloMessage = await client.send<HelloWsOutgoingMessage>({
+        type: MessageType.Hello,
+        version: '2.4.0',
+        os: 'ios',
+        source: 'climate',
+        compatibility: 3,
+        token: auth.token,
+      });
 
-        ws.on('message', (message: string) => {
-          const incomingMessage = JSON.parse(message);
-          if (
-            'message_id' in incomingMessage &&
-            incomingMessage.message_id in client.outgoingMessages &&
-            client.outgoingMessages[incomingMessage.message_id].type === MessageType.Hello
-          ) {
-            return this.onHelloMessageResponse(incomingMessage, client);
-          }
-        });
-
-        const helloMessage: WsOutgoingMessage = {
-          type: MessageType.Hello,
-          message_id: client.generateMessageId(),
-          version: '2.4.0',
-          os: 'ios',
-          source: 'climate',
-          compatibility: 3,
-          token: auth.token,
-        };
-
-        client.send(helloMessage).catch(err => {
-          this.log.error('Failed to send Hello message ->', helloMessage.message_id, err);
-        });
+      client.on('message', (message: WsIncomingMessage) => {
+        if (
+          message.type === 'response' &&
+          message.message_id === helloMessage.message_id &&
+          message.status === 200
+        ) {
+          this.onHelloMessageResponse(
+              message as ResponseWsIncomingMessage,
+              client,
+          );
+        }
       });
     }
 
@@ -140,8 +133,8 @@ export class HomebridgePrincessHeaterPlatform implements DynamicPlatformPlugin {
 
             new HomewizardPrincessHeaterAccessory(
               this,
-                        accessory as PlatformAccessory<PrincessHeaterAccessoryContext>,
-                        wsClient,
+              accessory as PlatformAccessory<PrincessHeaterAccessoryContext>,
+              wsClient,
             );
 
             this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
