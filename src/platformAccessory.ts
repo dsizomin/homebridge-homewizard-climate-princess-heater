@@ -5,9 +5,10 @@ import {
   JSONPatchWsIncomingMessage,
   JSONPatchWsOutgoingMessage,
   PrincessHeaterAccessoryContext,
-  PrincessHeaterStateWsIncomingMessage, ResponseWsIncomingMessage,
+  PrincessHeaterStateWsIncomingMessage,
+  ResponseWsIncomingMessage,
   SubscribeWsOutgoingMessage,
-  WsIncomingMessage, WsOutgoingMessage,
+  WsIncomingMessage,
 } from './ws/types';
 import {WsAPIClient} from './ws';
 import {MessageType} from './ws/const';

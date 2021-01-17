@@ -10,13 +10,8 @@ import {
 
 import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
 import {HomewizardPrincessHeaterAccessory} from './platformAccessory';
-import {
-  HelloWsOutgoingMessage,
-  PrincessHeaterAccessoryContext,
-  ResponseWsIncomingMessage,
-  WsIncomingMessage,
-} from './ws/types';
-import {DeviceType, MessageType} from './ws/const';
+import {PrincessHeaterAccessoryContext} from './ws/types';
+import {DeviceType} from './ws/const';
 import {HttpAPIClient} from './http';
 import {WsAPIClient} from './ws';
 
