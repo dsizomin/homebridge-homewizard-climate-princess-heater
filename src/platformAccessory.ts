@@ -85,12 +85,10 @@ export class HomewizardPrincessHeaterAccessory {
 
     return trySend()
       .catch(err => {
-        if (err.code === 400) {
+        if (err.status === 400) {
           this.platform.log.warn('Error code 400. Might mean we need to re-subscribe ->', message, err);
           return this.subscribe().then(() => trySend());
         } else {
-          this.platform.log.error('Failed to send jsonPatch message ->', message, err);
-          callback(err);
           throw err;
         }
       })
