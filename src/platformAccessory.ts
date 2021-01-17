@@ -5,7 +5,6 @@ import {
     JSONPatchWsIncomingMessage,
     JSONPatchWsOutgoingMessage,
     PrincessHeaterAccessoryContext,
-    PrincessHeaterState,
     PrincessHeaterStateWsIncomingMessage,
     SubscribeWsOutgoingMessage
 } from "./ws/types";
