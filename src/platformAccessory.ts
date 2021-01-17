@@ -24,7 +24,7 @@ export class HomewizardPrincessHeaterAccessory {
      * These are just used to create a working example
      * You should implement your own code to track the state of your accessory
      */
-    private state: PrincessHeaterState | null = null;
+    // private state: PrincessHeaterState | null = null;
 
     constructor(
         private readonly platform: HomebridgePrincessHeaterPlatform,
@@ -77,24 +77,44 @@ export class HomewizardPrincessHeaterAccessory {
     }
 
     onJSONMessage(message: JSONPatchWsIncomingMessage) {
-        console.log('Incoming JSON patch', message)
+        message.patch.forEach(patchItem => {
+            const {op, path, value} = patchItem
+
+            if (op === 'replace') {
+                const match = path.match(/^\/state\/(.*)$/)
+                if (match && match[1]) {
+                    const stateKey = match[1];
+
+                    switch (stateKey) {
+                        case 'power_on':
+                            this.service.updateCharacteristic(
+                                this.platform.Characteristic.CurrentHeatingCoolingState,
+                                value ?
+                                    this.platform.Characteristic.CurrentHeatingCoolingState.HEAT :
+                                    this.platform.Characteristic.CurrentHeatingCoolingState.OFF
+                            );
+                            break;
+                        case 'current_temperature':
+                            this.service.updateCharacteristic(
+                                this.platform.Characteristic.CurrentTemperature,
+                                value
+                            );
+                            break;
+                    }
+                }
+            }
+        })
     }
 
     onStateMessage(message: PrincessHeaterStateWsIncomingMessage) {
         this.platform.log.info('Updating state from message ->', message);
-        this.state = message.state
+        // this.state = message.state
 
         Object.keys(message.state).forEach(key => {
             const value = message.state[key]
 
             switch (key) {
                 case 'power_on':
-                    this.service.setCharacteristic(
-                        this.platform.Characteristic.TargetHeatingCoolingState,
-                        value ?
-                            this.platform.Characteristic.TargetHeatingCoolingState.HEAT :
-                            this.platform.Characteristic.TargetHeatingCoolingState.OFF
-                    );
                     this.service.setCharacteristic(
                         this.platform.Characteristic.CurrentHeatingCoolingState,
                         value ?
@@ -108,89 +128,81 @@ export class HomewizardPrincessHeaterAccessory {
                         value
                     );
                     break;
-                case 'target_temperature':
-                    this.service.setCharacteristic(
-                        this.platform.Characteristic.TargetTemperature,
-                        value
-                    );
-                    break;
             }
         })
     }
 
     setTargetHeatingCoolingState(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-        if (this.state) {
+        // if (this.state) {
 
-            let currentValue: CharacteristicValue = this.state.power_on ?
-                this.platform.Characteristic.TargetHeatingCoolingState.HEAT :
-                this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+        let stateValue: boolean
+        let normalizedValue: CharacteristicValue = value
 
-            let stateValue: boolean
-            let normalizedValue: CharacteristicValue = value
-
-            switch (value) {
-                case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
-                case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
-                    stateValue = false;
-                    normalizedValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF
-                    break;
-                case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
-                case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
-                    stateValue = true;
-                    normalizedValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT
-                    break;
-                default:
-                    this.platform.log.warn('Setting Characteristic TargetHeatingCoolingState, but value is not supported ->', value);
-                    callback(new Error('Unsupported characteristic value'), currentValue)
-                    return;
-            }
-
-            this.platform.log.debug('Set Characteristic TargetHeatingCoolingState ->', value, stateValue);
-
-            const message: JSONPatchWsOutgoingMessage = {
-                type: MessageType.JSONPatch,
-                message_id: this.wsClient.generateMessageId(),
-                device: this.accessory.context.device.identifier,
-                patch: [{
-                    op: "replace",
-                    path: `/state/power_on`,
-                    value: stateValue
-                }]
-            }
-
-            this.wsClient.send(message);
-
-            this.service.updateCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState, normalizedValue)
-
-            callback(null)
-        } else {
-            this.platform.log.warn('Trying to set TargetHeatingCoolingState but state is null');
-            callback(new Error('Trying to set TargetHeatingCoolingState but state is null'))
+        switch (value) {
+            case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
+            case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
+                stateValue = false;
+                normalizedValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF
+                break;
+            case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
+            case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
+                stateValue = true;
+                normalizedValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT
+                break;
+            default:
+                this.platform.log.warn('Setting Characteristic TargetHeatingCoolingState, but value is not supported ->', value);
+                callback(new Error('Unsupported characteristic value'))
+                return;
         }
+
+        this.platform.log.debug('Set Characteristic TargetHeatingCoolingState ->', value, stateValue);
+
+        const message: JSONPatchWsOutgoingMessage = {
+            type: MessageType.JSONPatch,
+            message_id: this.wsClient.generateMessageId(),
+            device: this.accessory.context.device.identifier,
+            patch: [{
+                op: "replace",
+                path: `/state/power_on`,
+                value: stateValue
+            }]
+        }
+
+        this.wsClient.send(message);
+
+        this.service.updateCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState, normalizedValue)
+
+        callback(null)
+        // } else {
+        //     this.platform.log.warn('Trying to set TargetHeatingCoolingState but state is null');
+        //     callback(new Error('Trying to set TargetHeatingCoolingState but state is null'))
+        // }
     }
 
     setTargetTemperature(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-        if (this.state) {
+        // if (this.state) {
 
-            const message: JSONPatchWsOutgoingMessage = {
-                type: MessageType.JSONPatch,
-                message_id: this.wsClient.generateMessageId(),
-                device: this.accessory.context.device.identifier,
-                patch: [{
-                    op: "replace",
-                    path: `/state/target_temperature`,
-                    value: value
-                }]
-            }
-
-            this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
-
-            this.wsClient.send(message);
-
-            callback(null)
-        } else {
-            this.platform.log.warn('Trying to set TargetTemperature but state is null');
-            callback(new Error('Trying to set TargetTemperature but state is null'))
+        const message: JSONPatchWsOutgoingMessage = {
+            type: MessageType.JSONPatch,
+            message_id: this.wsClient.generateMessageId(),
+            device: this.accessory.context.device.identifier,
+            patch: [{
+                op: "replace",
+                path: `/state/target_temperature`,
+                value: value
+            }]
         }
+
+        this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
+
+        this.wsClient.send(message);
+
+        this.service.updateCharacteristic(this.platform.Characteristic.TargetTemperature, value)
+
+        callback(null)
+        // } else {
+        //     this.platform.log.warn('Trying to set TargetTemperature but state is null');
+        //     callback(new Error('Trying to set TargetTemperature but state is null'))
+        // }
     }
 }
