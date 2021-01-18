@@ -13,21 +13,31 @@ export class WsAPIClient extends EventEmitter {
 
   private ws: WebSocket | null = null;
 
-  private wsWebsocketPromise: Promise<WebSocket>;
+  private wsPromise: Promise<WebSocket>;
 
   constructor(
     private readonly log: Logger,
     private readonly httpApiClient: HttpAPIClient,
   ) {
     super();
-    this.wsWebsocketPromise = this._openWebSocketConnection();
+
+    const _openPermanentWSConnection = async () => {
+      const ws = await this._openWithHandshake();
+      ws.once('close', () => {
+        this.log.debug('Websocket connection was closed. Reopening...');
+        this.wsPromise = _openPermanentWSConnection();
+      });
+      return ws;
+    };
+
+    this.wsPromise = _openPermanentWSConnection();
   }
 
   public async send<M extends WsOutgoingMessage>(
     message: Omit<M, 'message_id'>,
   ): Promise<ResponseWsIncomingMessage> {
 
-    const ws = await this._obtainWebSocket();
+    const ws = await this.wsPromise;
 
     return this._send<M>(message, ws)
       .catch(err => {
@@ -44,29 +54,8 @@ export class WsAPIClient extends EventEmitter {
       });
   }
 
-  private _openWebSocketConnection(): Promise<WebSocket> {
+  private _openWithHandshake(): Promise<WebSocket> {
     return this._open().then(ws => this._handshake(ws));
-  }
-
-  private async _obtainWebSocket(): Promise<WebSocket> {
-    const promise = this.wsWebsocketPromise;
-
-    const ws: WebSocket = await promise;
-    if (
-      ws.readyState === WebSocket.CLOSING ||
-      ws.readyState === WebSocket.CLOSED
-    ) {
-      if (promise === this.wsWebsocketPromise) {
-        this.log.warn('WS connection is closing or closed. Attempting to reopen');
-        this.wsWebsocketPromise = this._openWebSocketConnection();
-        return this.wsWebsocketPromise;
-      } else {
-        this.log.warn('WS connection is closing or closed, but somebody has already reopened it.');
-        return this.wsWebsocketPromise;
-      }
-    } else {
-      return ws;
-    }
   }
 
   private _open(): Promise<WebSocket> {
@@ -91,10 +80,6 @@ export class WsAPIClient extends EventEmitter {
       const openTimeout = setTimeout(() => {
         rej(new Error(`WS connection was not ready in ${TIMEOUT}ms`));
       }, TIMEOUT);
-
-      setTimeout(() => {
-        ws.close();
-      }, 15 * 1000);
 
       ws.on('open', () => {
         clearTimeout(openTimeout);
