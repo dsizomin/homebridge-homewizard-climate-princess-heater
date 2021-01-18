@@ -13,18 +13,21 @@ export class WsAPIClient extends EventEmitter {
 
   private ws: WebSocket | null = null;
 
+  private wsWebsocketPromise: Promise<WebSocket>;
+
   constructor(
     private readonly log: Logger,
     private readonly httpApiClient: HttpAPIClient,
   ) {
     super();
+    this.wsWebsocketPromise = this._openWebSocketConnection();
   }
 
   public async send<M extends WsOutgoingMessage>(
     message: Omit<M, 'message_id'>,
   ): Promise<ResponseWsIncomingMessage> {
 
-    const ws = await this._getWebSocket();
+    const ws = await this._obtainWebSocket();
 
     return this._send<M>(message, ws)
       .catch(err => {
@@ -41,28 +44,29 @@ export class WsAPIClient extends EventEmitter {
       });
   }
 
-  private _getWebSocket(): Promise<WebSocket> {
-    return new Promise((res, rej) => {
-      if (
-        !this.ws ||
-        this.ws.readyState === WebSocket.CLOSING ||
-        this.ws.readyState === WebSocket.CLOSED
-      ) {
+  private _openWebSocketConnection(): Promise<WebSocket> {
+    return this._open().then(ws => this._handshake(ws));
+  }
 
-        this.log.warn('WS connection is not initialized or closed. Attempting to reopen');
+  private async _obtainWebSocket(): Promise<WebSocket> {
+    const promise = this.wsWebsocketPromise;
 
-        this.
-          _open()
-          .then(ws => this._handshake(ws))
-          .then(ws => {
-            this.ws = ws;
-            res(ws);
-          })
-          .catch(err => rej(err));
+    const ws: WebSocket = await promise;
+    if (
+      ws.readyState === WebSocket.CLOSING ||
+      ws.readyState === WebSocket.CLOSED
+    ) {
+      if (promise === this.wsWebsocketPromise) {
+        this.log.warn('WS connection is closing or closed. Attempting to reopen');
+        this.wsWebsocketPromise = this._openWebSocketConnection();
+        return this.wsWebsocketPromise;
       } else {
-        return res(this.ws);
+        this.log.warn('WS connection is closing or closed, but somebody has already reopened it.');
+        return this.wsWebsocketPromise;
       }
-    });
+    } else {
+      return ws;
+    }
   }
 
   private _open(): Promise<WebSocket> {
@@ -87,6 +91,10 @@ export class WsAPIClient extends EventEmitter {
       const openTimeout = setTimeout(() => {
         rej(new Error(`WS connection was not ready in ${TIMEOUT}ms`));
       }, TIMEOUT);
+
+      setTimeout(() => {
+        ws.close();
+      }, 15 * 1000);
 
       ws.on('open', () => {
         clearTimeout(openTimeout);
@@ -150,6 +158,7 @@ export class WsAPIClient extends EventEmitter {
       this.log.debug('Waiting for message response -> ', outgoingMessage);
 
       const timeout = setTimeout(() => {
+        this.off('message', onMessage);
         rej(new Error(`Didn't receive response in ${TIMEOUT}!`));
       }, TIMEOUT);
 

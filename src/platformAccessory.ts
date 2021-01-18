@@ -13,6 +13,8 @@ import {
 import {WsAPIClient} from './ws';
 import {MessageType} from './ws/const';
 
+const JSON_PATCH_MAX_RETRIES = 5;
+
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -66,7 +68,7 @@ export class HomewizardPrincessHeaterAccessory {
     });
   }
 
-  async jsonPatch(path: string, value: boolean | number, callback: CharacteristicSetCallback): Promise<ResponseWsIncomingMessage> {
+  async jsonPatch(path: string, value: boolean | number, callback: CharacteristicSetCallback): Promise<void> {
 
     const message = {
       type: MessageType.JSONPatch,
@@ -78,24 +80,24 @@ export class HomewizardPrincessHeaterAccessory {
       }],
     };
 
-    const trySend = () => this.wsClient.send(message).then(m => {
-      callback(null);
-      return m;
-    });
+    const trySend = (retriesLeft: number) => {
+      return this.wsClient.send(message)
+        .then(m => {
+          callback(null);
+          return m;
+        })
+        .catch(err => {
+          if (err.status === 400 && retriesLeft) {
+            this.platform.log.warn(`Error code 400. Might mean we need to re-subscribe (${retriesLeft} retries left) ->`, message, err);
+            return this.subscribe().then(() => trySend(retriesLeft - 1));
+          }
+        });
+    };
 
-    return trySend()
-      .catch(err => {
-        if (err.status === 400) {
-          this.platform.log.warn('Error code 400. Might mean we need to re-subscribe ->', message, err);
-          return this.subscribe().then(() => trySend());
-        } else {
-          throw err;
-        }
-      })
+    await trySend(JSON_PATCH_MAX_RETRIES)
       .catch(err => {
         this.platform.log.error('Failed to send jsonPatch message ->', message, err);
         callback(err);
-        throw err; 
       });
   }
 
